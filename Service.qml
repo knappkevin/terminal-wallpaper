@@ -338,7 +338,7 @@ Item {
     bgColor: "#111111",
     bgOpacity: 0.0,
     posX: 0, posY: 0, sizeX: 100, sizeY: 100,
-    autoRestart: true,
+    autoRestart: false,
     cursorVisible: false,
     useTheme: true,
     interactive: false,
