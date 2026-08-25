@@ -496,6 +496,9 @@ Item {
   Process { id: exitLogProc; command: [] }
 
   function logLine(msg: string): void {
+    // Opt-in like the helper's breadcrumb trail: only write the exits/stderr
+    // log when debug is enabled. Default installs leave no log files behind.
+    if (root.setting("debug") !== true) return
     if (exitLogProc.running) return
     exitLogProc.command = ["bash", "-c",
       'printf "%s %s\\n" "$(date +%s)" "$1" >> "$2"',
