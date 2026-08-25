@@ -738,7 +738,7 @@ Item {
                 onTextEdited: root.draftCommand = text
                 onEditingFinished: root.commit()
                 Keys.onReturnPressed: root.commit()
-                Keys.onEnterReturn: root.commit()
+                Keys.onEnterPressed: root.commit()
               }
             }
 
@@ -784,7 +784,7 @@ Item {
                   onTextEdited: root.draftFg = text
                   onEditingFinished: root.commit()
                   Keys.onReturnPressed: root.commit()
-                  Keys.onEnterReturn: root.commit()
+                  Keys.onEnterPressed: root.commit()
                 }
               }
               Column {
@@ -804,7 +804,7 @@ Item {
                   onTextEdited: root.draftBg = text
                   onEditingFinished: root.commit()
                   Keys.onReturnPressed: root.commit()
-                  Keys.onEnterReturn: root.commit()
+                  Keys.onEnterPressed: root.commit()
                 }
               }
             }
