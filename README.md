@@ -55,5 +55,5 @@ omarchy-shell terminal-wallpaper setCommand 'fastfetch'   # change command
 ## Remove
 
 ```sh
-omarchy plugin remove io.github.knappkevin.terminal-wallpaper
+omarchy plugin remove knappkevin.terminal-wallpaper
 ```

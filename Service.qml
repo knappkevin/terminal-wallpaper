@@ -29,7 +29,7 @@ Item {
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateHome: home + "/.local/state"
   readonly property string currentBackgroundLink: stateHome + "/omarchy/current/background"
-  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "io.github.knappkevin.terminal-wallpaper"
+  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "github.knappkevin.terminal-wallpaper"
   readonly property string pluginDir: manifest && manifest.__sourceDir ? String(manifest.__sourceDir) : (home + "/.config/omarchy/plugins/" + pluginId)
   readonly property string helperPath: pluginDir + "/term-bg.py"
   readonly property string settingsPath: stateHome + "/omarchy/terminal-wallpaper/terminal-wallpaper.json"
@@ -142,17 +142,17 @@ Item {
 
     function ping(): string { return "ok" }
 
-    function refresh(): void { root.refreshBackground() }
+    function refresh() { root.refreshBackground() }
 
-    function set(path: string): void { root.setBackground(path, false) }
+    function set(path: string) { root.setBackground(path, false) }
 
-    function setInstant(path: string): void { root.setBackground(path, true) }
+    function setInstant(path: string) { root.setBackground(path, true) }
 
-    function transition(fromPath: string, path: string): void {
+    function transition(fromPath: string, path: string) {
       root.transitionBackground(fromPath, path, path, false, false)
     }
 
-    function themeTransition(fromPath: string, path: string, finalPath: string, colorsB64: string, shellB64: string): void {
+    function themeTransition(fromPath: string, path: string, finalPath: string, colorsB64: string, shellB64: string) {
       root.transitionBackgroundWithTheme(fromPath, path, finalPath, colorsB64, shellB64)
     }
   }
@@ -495,7 +495,7 @@ Item {
   // ----------------------------------------------------------- death log
   Process { id: exitLogProc; command: [] }
 
-  function logLine(msg: string): void {
+  function logLine(msg: string) {
     // Opt-in like the helper's breadcrumb trail: only write the exits/stderr
     // log when debug is enabled. Default installs leave no log files behind.
     if (root.setting("debug") !== true) return
@@ -620,11 +620,11 @@ Item {
   IpcHandler {
     target: "terminal-wallpaper"
 
-    function open(): void { root.openMenu() }
-    function close(): void { root.closeMenu() }
-    function toggle(): void { root.menuOpen ? root.closeMenu() : root.openMenu() }
-    function refresh(): void { root.nudgeHelper() }
-    function setCommand(command: string): void {
+    function open() { root.openMenu() }
+    function close() { root.closeMenu() }
+    function toggle() { root.menuOpen ? root.closeMenu() : root.openMenu() }
+    function refresh() { root.nudgeHelper() }
+    function setCommand(command: string) {
       var next = root.mergedConfig()
       next.command = command
       root.writeSettings(next)
