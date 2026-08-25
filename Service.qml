@@ -370,16 +370,17 @@ Item {
       var d = JSON.parse(String(raw || "{}"))
       if (d && typeof d === "object") { cfg = d; return }
     } catch (e) {}
-    cfg = ({})
   }
 
   function writeSettings(obj) {
     var json = JSON.stringify(obj || mergedConfig(), null, 2)
+    var tmpPath = settingsPath + ".tmp"
     writeProc.command = [
       "bash", "-lc",
       "mkdir -p " + Util.shellQuote(home + "/.local/state/omarchy/terminal-wallpaper")
       + " && printf '%s' " + Util.shellQuote(json)
-      + " > " + Util.shellQuote(settingsPath)
+      + " > " + Util.shellQuote(tmpPath)
+      + " && mv " + Util.shellQuote(tmpPath) + " " + Util.shellQuote(settingsPath)
     ]
     writeProc.running = true
   }
@@ -547,6 +548,7 @@ Item {
   }
 
   function commit() {
+    if (!cfg || Object.keys(cfg).length === 0) return
     // Persist the current draft values immediately. writeSettings ->
     // FileView onFileChanged -> nudgeHelper (SIGHUP) -> the helper re-applies
     // in place, so every control can live-apply without an explicit Apply button.
@@ -735,6 +737,8 @@ Item {
                 foreground: Color.menu.text
                 onTextEdited: root.draftCommand = text
                 onEditingFinished: root.commit()
+                Keys.onReturnPressed: root.commit()
+                Keys.onEnterReturn: root.commit()
               }
             }
 
@@ -779,6 +783,8 @@ Item {
                   foreground: Color.menu.text
                   onTextEdited: root.draftFg = text
                   onEditingFinished: root.commit()
+                  Keys.onReturnPressed: root.commit()
+                  Keys.onEnterReturn: root.commit()
                 }
               }
               Column {
@@ -797,6 +803,8 @@ Item {
                   foreground: Color.menu.text
                   onTextEdited: root.draftBg = text
                   onEditingFinished: root.commit()
+                  Keys.onReturnPressed: root.commit()
+                  Keys.onEnterReturn: root.commit()
                 }
               }
             }
