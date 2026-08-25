@@ -74,8 +74,8 @@ def load_config(path):
     cfg["fontSize"] = float(cfg.get("fontSize", 14)) or 14
     cfg["fgColor"] = str(cfg.get("fgColor") or "#dddddd")
     cfg["bgColor"] = str(cfg.get("bgColor") or "#111111")
-    cfg["bgOpacity"] = float(cfg.get("bgOpacity", 0.25))
-    cfg["autoRestart"] = bool(cfg.get("autoRestart", True))
+    cfg["bgOpacity"] = float(cfg.get("bgOpacity", 0.0))
+    cfg["autoRestart"] = bool(cfg.get("autoRestart", False))
     cfg["cursorVisible"] = bool(cfg.get("cursorVisible", False))
     cfg["useTheme"] = bool(cfg.get("useTheme", True))
     cfg["interactive"] = bool(cfg.get("interactive", False))
@@ -814,7 +814,7 @@ class TerminalWallpaper:
         gate is hidden and the terminal receives clicks as usual. The
         compositor already denies keyboard focus (KeyboardMode.NONE), so this
         fully deactivates the terminal."""
-        on = self.cfg.get("interactive", True)
+        on = self.cfg.get("interactive", False)
         for gate in getattr(self, "gates", []):
             gate.set_visible(not on)
         self._dbg("interactive=%s gates=%d" % (on, len(getattr(self, "gates", []))))

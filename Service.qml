@@ -509,18 +509,18 @@ Item {
 
   // ------------------------------------------------------------ menu state
   property bool menuOpen: false
-  property string draftCommand: ""
-  property real draftFontSize: 14
-  property real draftOpacity: 0.9
-  property string draftFg: "#cacccc"
-  property string draftBg: "#101315"
-  property real draftPosX: 0
-  property real draftPosY: 0
-  property real draftSizeX: 100
-  property real draftSizeY: 100
-  property bool draftAutoRestart: true
-  property bool draftUseTheme: true
-  property bool draftInteractive: true
+  property string draftCommand: String(setting("command"))
+  property real draftFontSize: numberSetting("fontSize")
+  property real draftOpacity: numberSetting("bgOpacity")
+  property string draftFg: String(setting("fgColor"))
+  property string draftBg: String(setting("bgColor"))
+  property real draftPosX: numberSetting("posX")
+  property real draftPosY: numberSetting("posY")
+  property real draftSizeX: numberSetting("sizeX")
+  property real draftSizeY: numberSetting("sizeY")
+  property bool draftAutoRestart: setting("autoRestart") === true
+  property bool draftUseTheme: setting("useTheme") !== false
+  property bool draftInteractive: setting("interactive") !== false
 
   function beginEdit() {
     draftCommand = String(setting("command"))
