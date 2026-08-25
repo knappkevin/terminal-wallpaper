@@ -336,7 +336,7 @@ Item {
     fontSize: 14,
     fgColor: "#dddddd",
     bgColor: "#111111",
-    bgOpacity: 0.25,
+    bgOpacity: 0.0,
     posX: 0, posY: 0, sizeX: 100, sizeY: 100,
     autoRestart: true,
     cursorVisible: false,
