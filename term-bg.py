@@ -192,7 +192,7 @@ class TerminalWallpaper:
         self.monitors = []
         self._terminal_rects = []
         self._bar_cache = []
-        self.child_pid = 0
+        self.child_pids = {}
         self.restart_delay = 1.0
         self.restart_source = None
         self._reposition_pending = False
@@ -566,9 +566,11 @@ class TerminalWallpaper:
     def _rebuild_monitor(self, idx):
         mon = self.monitors[idx]
         win = self.windows[idx]
+        terminal = self.terminals[idx]
         destroy_id, child_id = self._win_handler_ids[idx]
         win.disconnect(destroy_id)
-        self.terminals[idx].disconnect(child_id)
+        terminal.disconnect(child_id)
+        self.child_pids.pop(terminal, None)
         self._rebuilding = True
         try:
             win.destroy()
@@ -700,9 +702,10 @@ class TerminalWallpaper:
         if any(str(fresh.get(k)) != str(old.get(k))
                for k in ("command", "fontFamily", "fontSize", "sizeX", "sizeY")):
             for terminal in self.terminals:
-                if self.child_pid:
+                pid = self.child_pids.get(terminal)
+                if pid:
                     try:
-                        os.kill(self.child_pid, signal.SIGKILL)
+                        os.kill(pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
                 terminal.reset(True, True)
@@ -753,7 +756,7 @@ class TerminalWallpaper:
                 None,
             )
             if ok and pid:
-                self.child_pid = pid
+                self.child_pids[terminal] = pid
                 self._start_cursor_enforcer(terminal)
             elif ok:
                 print("term-bg: spawn returned no pid", file=sys.stderr)
@@ -765,6 +768,7 @@ class TerminalWallpaper:
             return
         if terminal not in self.terminals:
             return
+        self.child_pids.pop(terminal, None)
         if not self.cfg["autoRestart"]:
             return
         if self.restart_source is not None:
