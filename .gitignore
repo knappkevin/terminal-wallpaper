@@ -1,0 +1,5 @@
+# user settings live outside this repo, under ~/.local/state/omarchy/terminal-wallpaper
+
+# python bytecode cache
+__pycache__/
+*.pyc

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.knappkevin.terminal-wallpaper",
+  "name": "Terminal Wallpaper",
+  "version": "1.0.0",
+  "author": "knappkevin",
+  "license": "MIT",
+  "description": "Run a real terminal emulator (VTE) as your desktop wallpaper, behind every window. Double-click to configure.",
+  "kinds": [
+    "service"
+  ],
+  "entryPoints": {
+    "service": "Service.qml"
+  }
+}
