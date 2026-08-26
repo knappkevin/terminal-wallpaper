@@ -22,7 +22,7 @@ Item {
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateHome: home + "/.local/state"
-  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "github.knappkevin.terminal-wallpaper"
+  readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "knappkevin.terminal-wallpaper"
   readonly property string pluginDir: manifest && manifest.__sourceDir ? String(manifest.__sourceDir) : (home + "/.config/omarchy/plugins/" + pluginId)
   readonly property string helperPath: pluginDir + "/term-bg.py"
   readonly property string settingsPath: stateHome + "/omarchy/terminal-wallpaper/terminal-wallpaper.json"
