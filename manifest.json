@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Kevin Knapp",
   "license": "MIT",
-  "description": "Run a terminal as part of your desktop wallpaper. Double-click wallpaper to configure.",
+  "description": "Run a terminal wallpaper on top of your existing wallpaper. Double-click wallpaper to configure.",
   "kinds": [
     "service"
   ],

@@ -1,6 +1,6 @@
 # Terminal Wallpaper Plugin for Omarchy
 
-Run a terminal as part of your desktop wallpaper. Double-click the wallpaper to configure the wallpaper image and terminal output. 
+Run a terminal wallpaper on top of your existing desktop wallpaper. Double-click the wallpaper to configure the terminal output. 
 
 ## Features
 
