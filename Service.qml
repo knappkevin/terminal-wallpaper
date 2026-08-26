@@ -2,21 +2,15 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import QtQuick
-import QtQuick.Effects
-import QtQuick.Shapes
 import qs.Commons
 import qs.Ui
 
-// Terminal Wallpaper: a real VTE terminal (via term-bg.py) over a QML
-// wallpaper surface. The wallpaper is rendered in QML exactly like
-// omarchy.background (per-screen PanelWindow on the Background layer with a
-// 420ms angled reveal), so detection and hot-switching use the same
-// IPC-driven mechanism stock does: omarchy-theme-set calls
-// `background themeTransition` (or `shell applyTheme` as a fallback) and
-// omarchy-theme-bg-set calls `background set`. The thin VTE helper rides on
-// the BOTTOM layer above the wallpaper and is nudged (SIGHUP) whenever the
-// shell's Color singleton changes -- the same palette event stock's UI
-// reacts to. No theme-set hook, no mtime poll, no daemon, no singleton lock.
+// Terminal Wallpaper: a real VTE terminal (via term-bg.py) rendered on the
+// BOTTOM layer above whatever wallpaper the stock omarchy.background plugin
+// provides. The stock plugin owns the Background layer and the "background"
+// IPC target; we just listen for Color singleton changes (same event the
+// shell's UI reacts to) and nudge the helper via SIGHUP. Double-click on the
+// desktop opens our config menu; right-click opens the stock wallpaper picker.
 Item {
   id: root
 
@@ -28,159 +22,16 @@ Item {
 
   readonly property string home: Quickshell.env("HOME")
   readonly property string stateHome: home + "/.local/state"
-  readonly property string currentBackgroundLink: stateHome + "/omarchy/current/background"
   readonly property string pluginId: manifest && manifest.id ? String(manifest.id) : "github.knappkevin.terminal-wallpaper"
   readonly property string pluginDir: manifest && manifest.__sourceDir ? String(manifest.__sourceDir) : (home + "/.config/omarchy/plugins/" + pluginId)
   readonly property string helperPath: pluginDir + "/term-bg.py"
   readonly property string settingsPath: stateHome + "/omarchy/terminal-wallpaper/terminal-wallpaper.json"
 
-  // ----------------------------------------------------------- wallpaper
-  // Ported from omarchy.background: backgroundVersion drives the reveal, the
-  // incoming layer grows behind a slanted, feathered mask that sweeps left
-  // to right as revealProgress eases 0->1 (420ms InOutCubic).
-  property string currentBackground: ""
-  property string displayedBackground: ""
-  property string incomingBackground: ""
-  property string oldBackground: ""
-  property bool finishingTransition: false
-  property int backgroundVersion: 0
-  property int revealStartedVersion: -1
-  property int pendingThemeVersion: -1
-  property string pendingColorsRaw: ""
-  property string pendingShellRaw: ""
-  property real revealProgress: 1
-
-  function imageUrl(path) { return Util.fileUrl(path) }
-
-  function refreshBackground() {
-    if (!readlinkProc.running) readlinkProc.running = true
-  }
-
-  function setBackground(path, instant) {
-    transitionBackground("", path, path, instant, false)
-  }
-
-  function transitionBackground(fromPath, path, finalPath, instant, force) {
-    path = String(path || "").trim()
-    finalPath = String(finalPath || path).trim()
-    fromPath = String(fromPath || "").trim()
-    if (!path || (!force && finalPath === currentBackground)) return
-    currentBackground = finalPath
-    backgroundVersion += 1
-    revealStartedVersion = -1
-
-    revealAnimation.stop()
-    finishingTransition = false
-
-    if (instant || !displayedBackground) {
-      oldBackground = ""
-      incomingBackground = ""
-      displayedBackground = path
-      revealProgress = 1
-      return
-    }
-
-    oldBackground = fromPath || displayedBackground
-    incomingBackground = path
-    revealProgress = 0
-  }
-
-  function setPendingTheme(colorsB64, shellB64) {
-    pendingColorsRaw = Util.decodeBase64(colorsB64)
-    pendingShellRaw = Util.decodeBase64(shellB64)
-    pendingThemeVersion = backgroundVersion
-    pendingThemeFallbackTimer.restart()
-  }
-
-  function applyPendingTheme() {
-    // Background polling can advance backgroundVersion while a theme switch is
-    // pending; the latest theme payload should still apply.
-    if (pendingThemeVersion < 0) return
-    pendingThemeFallbackTimer.stop()
-    Color.loadColors(pendingColorsRaw)
-    // Color.loadShell also refreshes Style so the type scale flips with the
-    // background reveal instead of waiting for a separate reload path.
-    Color.loadShell(pendingShellRaw)
-    Style.scheduleRefresh()
-    pendingThemeVersion = -1
-    pendingColorsRaw = ""
-    pendingShellRaw = ""
-  }
-
-  function transitionBackgroundWithTheme(fromPath, path, finalPath, colorsB64, shellB64) {
-    transitionBackground(fromPath, path, finalPath, false, true)
-    setPendingTheme(colorsB64, shellB64)
-    if (!incomingBackground || revealProgress >= 1) applyPendingTheme()
-  }
-
-  function startReveal(panel) {
-    if (!incomingBackground) return
-    panel.maskReady = true
-    if (revealStartedVersion === backgroundVersion) return
-    revealStartedVersion = backgroundVersion
-    applyPendingTheme()
-    revealAnimation.restart()
-  }
-
-  Process {
-    id: readlinkProc
-    command: ["readlink", "-f", root.currentBackgroundLink]
-    stdout: StdioCollector {
-      onStreamFinished: root.setBackground(String(text || "").trim(), false)
-    }
-  }
-
-  // ----------------------------------------------------------- background IPC
-  // Mirrors omarchy.background's handler so omarchy-theme-set /
-  // omarchy-theme-bg-set keep working unchanged while omarchy.background is
-  // disabled. Owning this target makes us responsible for applying the theme
-  // payload (Color.loadColors/loadShell) -- omarchy-theme-set's
-  // `background themeTransition || shell applyTheme` fallback no longer fires
-  // while we answer, so the whole shell would otherwise not re-tint.
-  IpcHandler {
-    target: "background"
-
-    function ping(): string { return "ok" }
-
-    function refresh() { root.refreshBackground() }
-
-    function set(path: string) { root.setBackground(path, false) }
-
-    function setInstant(path: string) { root.setBackground(path, true) }
-
-    function transition(fromPath: string, path: string) {
-      root.transitionBackground(fromPath, path, path, false, false)
-    }
-
-    function themeTransition(fromPath: string, path: string, finalPath: string, colorsB64: string, shellB64: string) {
-      root.transitionBackgroundWithTheme(fromPath, path, finalPath, colorsB64, shellB64)
-    }
-  }
-
-  Timer {
-    id: pendingThemeFallbackTimer
-    interval: 300
-    repeat: false
-    onTriggered: root.applyPendingTheme()
-  }
-
-  NumberAnimation {
-    id: revealAnimation
-    target: root
-    property: "revealProgress"
-    from: 0
-    to: 1
-    duration: 420
-    easing.type: Easing.InOutCubic
-    onFinished: {
-      if (root.incomingBackground) {
-        root.displayedBackground = root.currentBackground || root.incomingBackground
-        root.finishingTransition = true
-      }
-      root.revealProgress = 1
-    }
-  }
-
+  // --------------------------------------------------- desktop double-click
+  // Transparent per-screen surface on the Background layer. The stock
+  // omarchy.background plugin renders the actual wallpaper image; we only
+  // need this for the MouseArea that catches double-clicks on desktop areas
+  // not covered by the terminal overlay.
   Variants {
     model: Quickshell.screens
 
@@ -197,127 +48,17 @@ Item {
         window: panel
       }
       color: "transparent"
-      // Keep render updates enabled. The background layer has been observed to
-      // lose its committed buffer while parked with updatesEnabled=false,
-      // leaving a black desktop until omarchy-shell is restarted. The wallpaper
-      // itself is static, so this favors correctness over a small render-loop
-      // optimization.
       updatesEnabled: true
-
-      property bool maskReady: false
-
-      function maybeStartReveal() {
-        if (!root.incomingBackground || root.revealProgress !== 0 || maskReady) return
-        if (incomingFrame.status !== Image.Ready) return
-        Qt.callLater(function() {
-          if (!root.incomingBackground || root.revealProgress !== 0 || maskReady) return
-          if (incomingFrame.status !== Image.Ready) return
-          root.startReveal(panel)
-        })
-      }
 
       WlrLayershell.namespace: "omarchy-terminal-wallpaper"
       WlrLayershell.layer: WlrLayer.Background
       WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
       exclusionMode: ExclusionMode.Ignore
 
-      Image {
-        id: base
-        anchors.fill: parent
-        source: root.imageUrl(root.displayedBackground)
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        cache: true
-        onStatusChanged: {
-          if (status === Image.Ready && root.finishingTransition) {
-            root.incomingBackground = ""
-            root.oldBackground = ""
-            root.finishingTransition = false
-          }
-        }
-      }
-
-      Image {
-        id: oldFrame
-        anchors.fill: parent
-        source: root.imageUrl(root.oldBackground)
-        fillMode: Image.PreserveAspectCrop
-        asynchronous: true
-        cache: false
-        smooth: true
-        mipmap: true
-        visible: root.oldBackground !== "" && root.revealProgress < 1
-        onStatusChanged: panel.maybeStartReveal()
-      }
-
-      Item {
-        id: incomingLayer
-        anchors.fill: parent
-        visible: root.incomingBackground !== "" && incomingFrame.status === Image.Ready && (root.revealProgress >= 1 || panel.maskReady)
-        layer.enabled: root.incomingBackground !== "" && root.revealProgress < 1
-        layer.smooth: true
-        layer.effect: MultiEffect {
-          maskEnabled: true
-          maskSource: revealMask
-          maskThresholdMin: 0.5
-          maskSpreadAtMin: 0.02
-        }
-
-        Image {
-          id: incomingFrame
-          anchors.fill: parent
-          source: root.imageUrl(root.incomingBackground)
-          fillMode: Image.PreserveAspectCrop
-          asynchronous: true
-          cache: false
-          smooth: true
-          mipmap: true
-          onStatusChanged: panel.maybeStartReveal()
-        }
-      }
-
-      Item {
-        id: revealMask
-        anchors.fill: parent
-        visible: false
-        layer.enabled: true
-
-        readonly property real slant: -0.18
-        readonly property real centerTop: width / 2 - slant * height / 2
-        readonly property real centerBottom: width / 2 + slant * height / 2
-        readonly property real reach: width / 2 + Math.abs(slant) * height / 2 + 4
-        readonly property real spread: reach * root.revealProgress
-
-        Shape {
-          anchors.fill: parent
-          antialiasing: true
-          preferredRendererType: Shape.CurveRenderer
-          ShapePath {
-            fillColor: "white"
-            strokeColor: "transparent"
-            startX: revealMask.centerTop - revealMask.spread; startY: 0
-            PathLine { x: revealMask.centerTop + revealMask.spread; y: 0 }
-            PathLine { x: revealMask.centerBottom + revealMask.spread; y: revealMask.height }
-            PathLine { x: revealMask.centerBottom - revealMask.spread; y: revealMask.height }
-            PathLine { x: revealMask.centerTop - revealMask.spread; y: 0 }
-          }
-        }
-      }
-
-      Connections {
-        target: root
-        function onIncomingBackgroundChanged() {
-          panel.maskReady = false
-          panel.maybeStartReveal()
-        }
-      }
-
       MouseArea {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton | Qt.RightButton
         onDoubleClicked: function(mouse) {
-          // Single source of config: the menu. Right-click also opens the
-          // stock background switcher for convenience.
           if (mouse.button === Qt.RightButton) {
             if (!bgSwitchProc.running) bgSwitchProc.running = true
           } else {
@@ -399,8 +140,8 @@ Item {
 
   // ------------------------------------------------------------- helper
   // term-bg.py is a plain child of omarchy-shell: respawned on exit, never
-  // daemonized. A shell restart briefly hides the terminal (never the
-  // wallpaper, which is QML now) and the next spawn brings it back.
+  // daemonized. A shell restart briefly hides the terminal (the stock
+  // background plugin keeps the wallpaper) and the next spawn brings it back.
   property bool active: true
   property bool depsOk: true
 
@@ -459,19 +200,15 @@ Item {
     onExited: function(code) { root.depsOk = (code === 0) }
   }
 
-  // Change-wallpaper button: reuses the stock background switcher. The result
-  // routes back through the `background set` IPC -> our handler -> reveal.
+  // Change-wallpaper button: delegates to the stock background switcher.
   Process {
     id: bgSwitchProc
     command: ["bash", "-c", "background=$(omarchy-theme-bg-switcher); [[ -n $background ]] && omarchy-theme-bg-set \"$background\""]
-    onExited: root.refreshBackground()
   }
 
   // Re-apply the terminal palette whenever the shell's Color singleton
-  // changes. Color.loadColors fires from `shell applyTheme` -- the exact IPC
-  // stock's UI reacts to -- so the wallpaper terminal tracks the same event.
-  // (When we own the `background` target, applyTheme runs from our
-  // themeTransition handler via Color.loadColors, so this still fires.)
+  // changes. The stock omarchy.background calls Color.loadColors from its
+  // themeTransition handler, so these signals fire on every theme switch.
   Connections {
     target: Color
     function onForegroundChanged() { root.nudgeHelper() }
@@ -484,7 +221,6 @@ Item {
   Component.onCompleted: {
     depCheck.running = true
     startHelper()
-    refreshBackground()
   }
 
   Component.onDestruction: {
