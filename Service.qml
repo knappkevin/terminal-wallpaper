@@ -148,7 +148,6 @@ Item {
   Process {
     id: helperProc
     command: ["python3", root.helperPath, "--config", root.settingsPath].concat(root.setting("debug") ? ["--debug"] : [])
-    stdout: StdioCollector {}
     stderr: SplitParser {
       splitMarker: "\n"
       onRead: data => {
@@ -242,7 +241,7 @@ Item {
     if (root.setting("debug") !== true) return
     if (exitLogProc.running) return
     exitLogProc.command = ["bash", "-c",
-      'printf "%s %s\\n" "$(date +%s)" "$1" >> "$2"',
+      '[ ! -L "$2" ] && printf "%s %s\\n" "$(date +%s)" "$1" >> "$2"',
       "-", msg, home + "/.local/state/terminal-wallpaper-exits.log"]
     exitLogProc.running = true
   }
