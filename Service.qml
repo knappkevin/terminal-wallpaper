@@ -115,13 +115,13 @@ Item {
 
   function writeSettings(obj) {
     var json = JSON.stringify(obj || mergedConfig(), null, 2)
-    var tmpPath = settingsPath + ".tmp"
+    var stateDir = home + "/.local/state/omarchy/terminal-wallpaper"
     writeProc.command = [
       "bash", "-lc",
-      "mkdir -p " + Util.shellQuote(home + "/.local/state/omarchy/terminal-wallpaper")
-      + " && printf '%s' " + Util.shellQuote(json)
-      + " > " + Util.shellQuote(tmpPath)
-      + " && mv " + Util.shellQuote(tmpPath) + " " + Util.shellQuote(settingsPath)
+      "mkdir -p " + Util.shellQuote(stateDir)
+      + " && tmp=$(mktemp " + Util.shellQuote(stateDir) + "/.terminal-wallpaper.XXXXXX.tmp)"
+      + " && printf '%s' " + Util.shellQuote(json) + " > \"$tmp\""
+      + " && mv \"$tmp\" " + Util.shellQuote(settingsPath)
     ]
     writeProc.running = true
   }
@@ -149,8 +149,12 @@ Item {
     id: helperProc
     command: ["python3", root.helperPath, "--config", root.settingsPath].concat(root.setting("debug") ? ["--debug"] : [])
     stdout: StdioCollector {}
-    stderr: StdioCollector {
-      onStreamFinished: if (text && text.trim().length) root.logLine("helper stderr: " + text.trim())
+    stderr: SplitParser {
+      splitMarker: "\n"
+      onRead: data => {
+        var trimmed = String(data).trim()
+        if (trimmed.length) root.logLine("helper stderr: " + trimmed)
+      }
     }
     onExited: function(exitCode, exitStatus) {
       root.logLine("helper exited code=" + exitCode + " status=" + exitStatus)

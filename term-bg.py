@@ -211,6 +211,8 @@ class TerminalWallpaper:
         try:
             import time as _t
             p = os.path.expanduser("~/.local/state/terminal-wallpaper-debug.log")
+            if os.path.islink(p):
+                return  # reject symlinked targets
             if os.path.exists(p) and os.path.getsize(p) > 2_000_000:
                 os.truncate(p, 0)
             with open(p, "a") as fh:
