@@ -121,7 +121,7 @@ Item {
       "mkdir -p " + Util.shellQuote(stateDir)
       + " && tmp=$(mktemp " + Util.shellQuote(stateDir) + "/.terminal-wallpaper.XXXXXX.tmp)"
       + " && printf '%s' " + Util.shellQuote(json) + " > \"$tmp\""
-      + " && mv \"$tmp\" " + Util.shellQuote(settingsPath)
+      + " && [ ! -L " + Util.shellQuote(settingsPath) + " ] && mv \"$tmp\" " + Util.shellQuote(settingsPath)
     ]
     writeProc.running = true
   }
