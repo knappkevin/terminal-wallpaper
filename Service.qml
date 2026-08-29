@@ -241,9 +241,21 @@ Item {
     // log when debug is enabled. Default installs leave no log files behind.
     if (root.setting("debug") !== true) return
     if (exitLogProc.running) return
-    exitLogProc.command = ["bash", "-c",
-      '[ ! -L "$2" ] && printf "%s %s\\n" "$(date +%s)" "$1" >> "$2"',
-      "-", msg, home + "/.local/state/terminal-wallpaper-exits.log"]
+    // Single O_NOFOLLOW open: atomically rejects a symlinked target (ELOOP ->
+    // OSError -> silent exit 0), so there is no check-then-open race. The old
+    // bash `[ ! -L ] && printf >>` had a TOCTOU window between test and write.
+    exitLogProc.command = ["python3", "-c",
+      "import os, sys, time\n"
+      + "p = sys.argv[2]\n"
+      + "try:\n"
+      + "    fd = os.open(p, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)\n"
+      + "except OSError:\n"
+      + "    sys.exit(0)\n"
+      + "try:\n"
+      + "    os.write(fd, ('%s %s\\n' % (int(time.time()), sys.argv[1])).encode('utf-8', 'replace'))\n"
+      + "finally:\n"
+      + "    os.close(fd)",
+      msg, home + "/.local/state/terminal-wallpaper-exits.log"]
     exitLogProc.running = true
   }
 

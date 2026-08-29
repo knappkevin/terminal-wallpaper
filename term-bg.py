@@ -40,6 +40,57 @@ THEME_COLORS_PATH = "~/.local/state/omarchy/current/theme/colors.toml"
 # (Terminal widget is sized to whole VTE cells and aligned to the bar by
 # _cell_aligned_rect -- no fixed pixel inset needed here.)
 
+# Hard cap on our own stderr output. The plugin relays the long-running
+# helper's stderr into QML; each print/traceback here would otherwise be
+# buffered by the shell without a byte bound (e.g. a settings file that stays
+# invalid lets reload() emit a new error on every SIGHUP forever). GLib/Gdk
+# log via the raw fd and are finite in practice; everything this class covers
+# -- our prints and Python tracebacks -- is bounded to STDERR_CAP bytes for
+# the lifetime of the process.
+STDERR_CAP = 64 * 1024
+
+
+class _CappedStderr:
+    """File-like mirror of stderr that relays, then drops past a byte cap."""
+
+    def __init__(self, real, cap=STDERR_CAP):
+        self._real = real
+        self._cap = cap
+        self._used = 0
+        # Expose the same metadata a real stderr has.
+        self.encoding = getattr(real, "encoding", None)
+        self.errors = getattr(real, "errors", None)
+
+    def write(self, s):
+        if self._used >= self._cap:
+            return len(s)  # pretend success; print() must not break
+        if isinstance(s, (bytes, bytearray)):
+            try:
+                s = bytes(s).decode(self.encoding or "utf-8", "replace")
+            except Exception:
+                return len(s)
+        s = str(s)
+        keep = min(self._cap - self._used, len(s))
+        if keep:
+            self._used += keep
+            try:
+                self._real.write(s[:keep])
+            except Exception:
+                pass
+        return len(s)
+
+    def flush(self):
+        try:
+            self._real.flush()
+        except Exception:
+            pass
+
+    def fileno(self):
+        return self._real.fileno()
+
+    def isatty(self):
+        return self._real.isatty()
+
 
 def hex_to_rgba(color, alpha):
     s = str(color or "").lstrip("#")
@@ -211,12 +262,18 @@ class TerminalWallpaper:
         try:
             import time as _t
             p = os.path.expanduser("~/.local/state/terminal-wallpaper-debug.log")
-            if os.path.islink(p):
-                return  # reject symlinked targets
-            if os.path.exists(p) and os.path.getsize(p) > 2_000_000:
-                os.truncate(p, 0)
-            with open(p, "a") as fh:
-                fh.write("%.3f %s\n" % (_t.monotonic() % 100000, msg))
+            # One O_NOFOLLOW open atomically rejects symlinked targets
+            # (ELOOP -> OSError -> silent skip); fstat/ftruncate on the same
+            # fd avoid a separate pathname lookup, so there is no check/open
+            # race and the target is never followed.
+            flags = os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(p, flags, 0o600)
+            try:
+                if os.fstat(fd).st_size > 2_000_000:
+                    os.ftruncate(fd, 0)
+                os.write(fd, ("%.3f %s\n" % (_t.monotonic() % 100000, msg)).encode("utf-8", "replace"))
+            finally:
+                os.close(fd)
         except Exception:
             pass
 
@@ -918,6 +975,8 @@ class TerminalWallpaper:
 
 
 def main():
+    sys.stderr = _CappedStderr(sys.stderr)  # bound our diagnostics before anything prints
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="", help="path to JSON config file")
     parser.add_argument("--debug", action="store_true",
