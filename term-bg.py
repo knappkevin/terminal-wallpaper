@@ -43,10 +43,16 @@ THEME_COLORS_PATH = "~/.local/state/omarchy/current/theme/colors.toml"
 # Hard cap on our own stderr output. The plugin relays the long-running
 # helper's stderr into QML; each print/traceback here would otherwise be
 # buffered by the shell without a byte bound (e.g. a settings file that stays
-# invalid lets reload() emit a new error on every SIGHUP forever). GLib/Gdk
-# log via the raw fd and are finite in practice; everything this class covers
-# -- our prints and Python tracebacks -- is bounded to STDERR_CAP bytes for
-# the lifetime of the process.
+# invalid lets reload() emit a new error on every SIGHUP forever).
+#
+# C libraries do not write through Python's sys.stderr: GLib's g_log() and
+# g_printerr() reach file descriptor 2 directly, bypassing the wrapper below.
+# _bound_glib_log() re-roots every g_log-routed message (Gtk-WARNING,
+# GLib-critical, layer-shell errors, ...) through this same cap; raw
+# g_printerr() calls that skip g_log are the one residual unbounded channel,
+# and nothing in this codebase emits them. Everything covered -- our prints,
+# tracebacks, and g_log messages -- is bounded to STDERR_CAP bytes for the
+# lifetime of the process.
 STDERR_CAP = 64 * 1024
 
 
@@ -90,6 +96,32 @@ class _CappedStderr:
 
     def isatty(self):
         return self._real.isatty()
+
+
+def _bound_glib_log(log_level, fields, _n_fields, _user_data=None):
+    """GLogWriterFunc: funnel C-side diagnostics through the stderr cap.
+
+    Installed by main() via GLib.log_set_writer_func() (this PyGObject build
+    does not expose log_set_default_handler; the writer callback is marshalled
+    as (level, fields, count), with the log domain carried in a GLIB_DOMAIN
+    field). Without a writer, GLib's g_log/g_message/g_warning writes reach
+    fd 2 from C, bypassing the Python _CappedStderr wrapper; with it, every
+    g_log-routed message (Gtk-WARNING, GLib-critical, layer-shell errors,
+    ...) is formatted by GLib's own log_writer_format_fields() and written
+    through the same byte bound the Python escapes use. Returning HANDLED
+    keeps GLib from emitting the same line unchanged to fd 2 on top of ours.
+    G_LOG_LEVEL_ERROR still aborts inside GLib after this handler returns,
+    unchanged by installing a writer.
+    """
+
+    try:
+        line = GLib.log_writer_format_fields(log_level, fields, False)
+        if isinstance(line, bytes):
+            line = line.decode("utf-8", "replace")
+        sys.stderr.write(line.rstrip("\n") + "\n")
+    except Exception:
+        pass
+    return GLib.LogWriterOutput.HANDLED
 
 
 def hex_to_rgba(color, alpha):
@@ -976,6 +1008,7 @@ class TerminalWallpaper:
 
 def main():
     sys.stderr = _CappedStderr(sys.stderr)  # bound our diagnostics before anything prints
+    GLib.log_set_writer_func(_bound_glib_log)  # route C g_log through the cap too
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="", help="path to JSON config file")
