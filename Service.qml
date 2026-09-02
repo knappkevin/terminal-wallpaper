@@ -74,7 +74,7 @@ Item {
   readonly property var defaults: ({
     command: "while true; do ttfx -i ~/.config/omarchy/branding/screensaver.txt --frame-rate 60 --canvas-width 0 --canvas-height 0 --reuse-canvas --anchor-canvas c --anchor-text c --random-effect --no-eol --no-restore-cursor; done",
     fontFamily: "monospace",
-    fontSize: 14,
+    fontSize: 13,
     fgColor: "#dddddd",
     bgColor: "#111111",
     bgOpacity: 0.0,
