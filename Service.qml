@@ -129,6 +129,19 @@ Item {
 
   property Process writeProc: Process { id: writeProc }
 
+  // Fresh install: neither the state dir nor the settings file exists yet.
+  // FileView's QFileSystemWatcher can't arm against a nonexistent path, so the
+  // first write (onLoadFailed -> writeSettings) would never be observed and cfg
+  // would stay empty (menu stuck on defaults, edits no-op). Create the dir,
+  // then reload once so the watcher re-arms against a real path and the file is
+  // read; loaded stays false until a read succeeds, which also skips this
+  // redundant reload on existing installs.
+  Process {
+    id: stateDirProc
+    command: ["bash", "-lc", "mkdir -p " + Util.shellQuote(root.stateHome + "/omarchy/terminal-wallpaper")]
+    onExited: function(code) { if (code === 0 && !root.settingsFile.loaded) settingsFile.reload() }
+  }
+
   FileView {
     id: settingsFile
     path: root.settingsPath
@@ -225,6 +238,7 @@ Item {
   Component.onCompleted: {
     depCheck.running = true
     startHelper()
+    stateDirProc.running = true
   }
 
   Component.onDestruction: {
