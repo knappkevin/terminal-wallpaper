@@ -139,7 +139,7 @@ Item {
   Process {
     id: stateDirProc
     command: ["bash", "-lc", "mkdir -p " + Util.shellQuote(root.stateHome + "/omarchy/terminal-wallpaper")]
-    onExited: function(code) { if (code === 0 && !root.settingsFile.loaded) settingsFile.reload() }
+    onExited: function(code) { if (code === 0 && !settingsFile.loaded) settingsFile.reload() }
   }
 
   FileView {
