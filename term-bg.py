@@ -23,6 +23,7 @@ import argparse
 import json
 import os
 import signal
+import stat
 import subprocess
 import sys
 
@@ -60,6 +61,27 @@ STDERR_CAP = 64 * 1024
 # the helper, and pairs with the O_NOFOLLOW open in load_config so the size
 # cap cannot be escaped through a symlinked substitute.
 CONFIG_MAX = 2 * 1024 * 1024
+
+
+def _read_regular_file(path, cap=CONFIG_MAX):
+    """Read a regular file via one O_NOFOLLOW open, capped at `cap` bytes.
+
+    Returns the raw bytes, or None for a missing, symlinked (ELOOP), non-regular,
+    unreadable, or oversized file. The open and the fstat happen on the same fd,
+    so there is no check-then-open race and the size cap cannot be escaped
+    through a substituted symlink; os.read then reads exactly the fstat'd size.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_size > cap:
+            return None
+        return os.read(fd, st.st_size)
+    finally:
+        os.close(fd)
 
 
 class _CappedStderr:
@@ -150,26 +172,14 @@ def load_config(path):
     # writes a complete merged config, so these are only safety fallbacks for
     # a hand-edited file that drops a key.
     cfg = {}
-    if path and os.path.isfile(path):
+    if path:
         try:
-            # Single O_NOFOLLOW open atomically rejects a substituted symlinked
-            # settings path (ELOOP -> OSError), so attacker-controlled JSON can
-            # never reach the config that feeds bash -lc below. The same fd is
-            # fstat'd to cap the read, so a huge or racing-replaced file cannot
-            # exhaust the helper either.
-            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-            fd = os.open(path, flags)
-            try:
-                size = os.fstat(fd).st_size
-                if size > CONFIG_MAX:
-                    raise OSError("config exceeds %d bytes" % CONFIG_MAX)
-                raw = os.read(fd, size).decode("utf-8", "replace")
-            finally:
-                os.close(fd)
-            data = json.loads(raw)
-            if isinstance(data, dict):
-                cfg.update(data)
-        except (OSError, ValueError) as exc:
+            raw = _read_regular_file(path)
+            if raw is not None:
+                data = json.loads(raw.decode("utf-8", "replace"))
+                if isinstance(data, dict):
+                    cfg.update(data)
+        except ValueError as exc:
             print("term-bg: failed to read config: %s" % exc, file=sys.stderr)
     cfg["command"] = str(cfg.get("command") or "")
     cfg["fontFamily"] = str(cfg.get("fontFamily") or "monospace")
@@ -202,11 +212,12 @@ def load_theme_colors():
 
     data = {}
     path = os.path.expanduser(THEME_COLORS_PATH)
-    try:
-        with open(path, "rb") as fh:
-            data = tomllib.load(fh)
-    except (OSError, tomllib.TOMLDecodeError) as exc:
-        print("term-bg: cannot read %s: %s" % (path, exc), file=sys.stderr)
+    raw = _read_regular_file(path)
+    if raw is not None:
+        try:
+            data = tomllib.loads(raw.decode("utf-8", "replace"))
+        except tomllib.TOMLDecodeError as exc:
+            print("term-bg: cannot read %s: %s" % (path, exc), file=sys.stderr)
 
     def rgb(r, g, b):
         return Gdk.RGBA(r, g, b, 1.0)
