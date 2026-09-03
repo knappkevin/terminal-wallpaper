@@ -55,6 +55,12 @@ THEME_COLORS_PATH = "~/.local/state/omarchy/current/theme/colors.toml"
 # lifetime of the process.
 STDERR_CAP = 64 * 1024
 
+# Bound on the settings file the plugin hands us. The real file is a few
+# hundred bytes; capping the read keeps a huge or replaced file from exhausting
+# the helper, and pairs with the O_NOFOLLOW open in load_config so the size
+# cap cannot be escaped through a symlinked substitute.
+CONFIG_MAX = 2 * 1024 * 1024
+
 
 class _CappedStderr:
     """File-like mirror of stderr that relays, then drops past a byte cap."""
@@ -146,8 +152,21 @@ def load_config(path):
     cfg = {}
     if path and os.path.isfile(path):
         try:
-            with open(path, "r", encoding="utf-8") as fh:
-                data = json.load(fh)
+            # Single O_NOFOLLOW open atomically rejects a substituted symlinked
+            # settings path (ELOOP -> OSError), so attacker-controlled JSON can
+            # never reach the config that feeds bash -lc below. The same fd is
+            # fstat'd to cap the read, so a huge or racing-replaced file cannot
+            # exhaust the helper either.
+            flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+            fd = os.open(path, flags)
+            try:
+                size = os.fstat(fd).st_size
+                if size > CONFIG_MAX:
+                    raise OSError("config exceeds %d bytes" % CONFIG_MAX)
+                raw = os.read(fd, size).decode("utf-8", "replace")
+            finally:
+                os.close(fd)
+            data = json.loads(raw)
             if isinstance(data, dict):
                 cfg.update(data)
         except (OSError, ValueError) as exc:
